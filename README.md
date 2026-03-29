@@ -1,2 +1,2 @@
 # MiloKoschinWebsite
-My personaal website
+My personal website
