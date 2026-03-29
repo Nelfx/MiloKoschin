@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Milo Goggia | Terminal</title>
+    
+    <link rel="stylesheet" href="terminal.css">
+
+    <style>
+        /* * COLOR PALETTE OVERRIDE */
+        :root {
+            --background: #121212;
+            --foreground: #cccccc;
+            --accent: #D3A04D;
+            --gray7: #aaaaaa;
+            --gray5: #555555;
+        }
+
+        /* * LAYOUT STYLES */
+        body {
+            background-color: var(--background);
+            color: var(--foreground);
+            margin: 0;
+            padding: 15px;
+            height: 100vh;
+            box-sizing: border-box;
+            display: flex;
+            flex-direction: row;
+            gap: 15px;
+            overflow: hidden;
+        }
+
+        .pane {
+            flex: 1;
+            border: 2px solid var(--gray5);
+            position: relative;
+            box-sizing: border-box;
+        }
+
+        /* * TEXT PANE & CUSTOM SCROLLBARS */
+        .text-pane {
+            padding: 30px;
+            overflow-y: auto;
+            overflow-x: hidden;
+            word-wrap: break-word;
+            
+            /* Firefox Terminal Scrollbar */
+            scrollbar-width: auto;
+            scrollbar-color: var(--gray5) var(--background);
+        }
+
+        /* WebKit (Chrome/Safari/Edge) Terminal Scrollbar */
+        .text-pane::-webkit-scrollbar {
+            width: 14px; 
+        }
+        
+        .text-pane::-webkit-scrollbar-track {
+            background: var(--background);
+            border-left: 2px solid var(--gray5);
+        }
+        
+        .text-pane::-webkit-scrollbar-thumb {
+            background: var(--gray5);
+            border: 2px solid var(--background); 
+        }
+        
+        .text-pane::-webkit-scrollbar-thumb:hover {
+            background: var(--accent); 
+        }
+
+        /* * ASCII ART HEADER STYLING */
+        pre.ascii-art {
+            /* Strip away the terminal.css code block styling */
+            background: transparent !important;
+            border: none !important;
+            padding: 0 !important;
+            margin: 0 0 25px 0 !important; 
+            
+            /* Make it match standard text */
+            color: var(--foreground) !important; 
+            font-size: clamp(0.6rem, 1vw, 1rem) !important; 
+            line-height: 1.1 !important;
+            
+            /* Completely disables both vertical and horizontal scrollbars on the header */
+            overflow: hidden !important; 
+        }
+
+        /* Hide the mobile header by default on large screens */
+        .mobile-header {
+            display: none !important;
+        }
+
+        /* * SHADER PANE STYLING */
+        .shader-pane {
+            overflow: hidden;
+            background: var(--background);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        canvas {
+            width: 100%;
+            height: 100%;
+            display: block;
+            image-rendering: pixelated;
+            image-rendering: crisp-edges;
+        }
+
+        /* * RESPONSIVE BREAKPOINT */
+        @media (max-width: 900px) {
+            body {
+                flex-direction: column;
+            }
+            
+            /* Swap the ASCII headers */
+            .desktop-header {
+                display: none !important;
+            }
+            .mobile-header {
+                display: block !important;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="pane text-pane">
+        
+        <pre class="ascii-art desktop-header">
+    __  ____ __         __ __                __    _     
+   /  |/  (_) /___     / //_/___  __________/ /_  (_)___ 
+  / /|_/ / / / __ \   / ,< / __ \/ ___/ ___/ __ \/ / __ \
+ / /  / / / / /_/ /  / /| / /_/ (__  ) /__/ / / / / / / /
+/_/  /_/_/_/\____/  /_/ |_\____/____/\___/_/ /_/_/_/ /_/ 
+                                                         
+        </pre>
+
+        <pre class="ascii-art mobile-header">
+    __  ____ __                      
+   /  |/  (_) /___                   
+  / /|_/ / / / __ \                  
+ / /  / / / / /_/ /                  
+/_/ _/_/_/_/\____/       __    _     
+   / //_/___  __________/ /_  (_)___ 
+  / ,< / __ \/ ___/ ___/ __ \/ / __ \
+ / /| / /_/ (__  ) /__/ / / / / / / /
+/_/ |_\____/____/\___/_/ /_/_/_/ /_/ 
+                                     
+        </pre>
+
+        <p>Hi, I'm a hobbyist developer working on a couple of things.</p>
+        <p>Lately I have been toying around with some shaders, as you can see.</p>
+        <h1>> Projects</h1>
+        <p>- puzzle game</p>
+        <p>- caustics using radiance cascades</p>
+        <p>- custom 32 bit CPU</p>
+        <p>- 3D pico8 game</p>
+        <h1>> Links</h1>
+        <p>
+            <a href="https://github.com/Nelfx" target="_blank">GitHub </a>
+            <p></p>
+            <a href="https://milokoschin.itch.io/" target="_blank">itch.io</a>
+        </p>
+        <p>> End of file.</p>
+    </div>
+
+    <div class="pane shader-pane" id="shader-container">
+        <canvas id="glcanvas"></canvas>
+    </div>
+
+    <script>
+        async function loadShaderAndInit() {
+            try {
+                const response = await fetch('shader.frag');
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                const fsSource = await response.text();
+                initWebGL(fsSource);
+            } catch (error) {
+                console.error("Failed to load shader:", error);
+                document.getElementById('shader-container').innerHTML = 
+                    `<p style="color: var(--accent); text-align: center; padding: 20px;">
+                        <strong>Error loading shader.frag</strong><br>
+                        Are you running a local development server?
+                    </p>`;
+            }
+        }
+
+        function initWebGL(fsSource) {
+            const canvas = document.getElementById('glcanvas');
+            const gl = canvas.getContext('webgl');
+
+            if (!gl) {
+                console.error("WebGL not supported");
+                return;
+            }
+
+            const vsSource = `
+                attribute vec2 position;
+                void main() {
+                    gl_Position = vec4(position, 0.0, 1.0);
+                }
+            `;
+
+            function compileShader(type, source) {
+                const shader = gl.createShader(type);
+                gl.shaderSource(shader, source);
+                gl.compileShader(shader);
+                if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+                    console.error('Shader compile error:', gl.getShaderInfoLog(shader));
+                    gl.deleteShader(shader);
+                    return null;
+                }
+                return shader;
+            }
+
+            const vs = compileShader(gl.VERTEX_SHADER, vsSource);
+            const fs = compileShader(gl.FRAGMENT_SHADER, fsSource);
+
+            const program = gl.createProgram();
+            gl.attachShader(program, vs);
+            gl.attachShader(program, fs);
+            gl.linkProgram(program);
+            gl.useProgram(program);
+
+            const buffer = gl.createBuffer();
+            gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+            gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
+                -1.0, -1.0,   1.0, -1.0,  -1.0,  1.0,
+                -1.0,  1.0,   1.0, -1.0,   1.0,  1.0
+            ]), gl.STATIC_DRAW);
+
+            const positionLocation = gl.getAttribLocation(program, "position");
+            gl.enableVertexAttribArray(positionLocation);
+            gl.vertexAttribPointer(positionLocation, 2, gl.FLOAT, false, 0, 0);
+
+            const timeLoc = gl.getUniformLocation(program, "u_time");
+            const resLoc = gl.getUniformLocation(program, "u_resolution");
+            const noiseTexLoc = gl.getUniformLocation(program, "u_noiseTex");
+
+            const noiseTexture = gl.createTexture();
+            const image = new Image();
+            image.src = "noise.png"; 
+            image.onload = () => {
+                gl.bindTexture(gl.TEXTURE_2D, noiseTexture);
+                gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, image);
+                gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
+                gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.REPEAT);
+                gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+            };
+
+            function resize() {
+                const rect = canvas.parentElement.getBoundingClientRect();
+                const PIXEL_RESOLUTION = 120; 
+                
+                canvas.width = PIXEL_RESOLUTION;
+                canvas.height = Math.floor(PIXEL_RESOLUTION * (rect.height / rect.width));
+                gl.viewport(0, 0, canvas.width, canvas.height);
+            }
+            window.addEventListener('resize', resize);
+            resize();
+
+            function render(time) {
+                gl.uniform1f(timeLoc, time * 0.001); 
+                gl.uniform2f(resLoc, canvas.width, canvas.height);
+                
+                gl.activeTexture(gl.TEXTURE0);
+                gl.bindTexture(gl.TEXTURE_2D, noiseTexture);
+                gl.uniform1i(noiseTexLoc, 0);
+                
+                gl.drawArrays(gl.TRIANGLES, 0, 6);
+                requestAnimationFrame(render);
+            }
+            requestAnimationFrame(render);
+        }
+
+        loadShaderAndInit();
+    </script>
+</body>
+</html>
